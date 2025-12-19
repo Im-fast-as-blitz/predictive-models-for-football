@@ -9,6 +9,11 @@ wandb
 comet_ml
 hydra-core
 
+fastapi
+uvicorn[standard]
+python-multipart
+catboost
+
 black
 isort
 pre-commit

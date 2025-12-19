@@ -1,0 +1,11 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - /home/nik/content:/app/content
+    environment:
+      - MODEL_PATH=/app/content/model.cbm
+      - DATA_PATH=/app/content/post_prepare_data.csv
+
