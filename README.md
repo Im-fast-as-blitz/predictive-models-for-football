@@ -21,13 +21,14 @@ FastAPI приложение для предсказания результат�
 
 ### Docker Compose
 ```bash
+cd docker
 docker compose up --build
 ```
 
 ### Локально
 ```bash
 pip install -r requirements_minimal.txt
-python3 app.py
+python3 api/app.py
 ```
 
 ## Использование API
