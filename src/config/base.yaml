@@ -1,0 +1,49 @@
+model:
+  hidden_size: 768
+  out_features: 3
+dataset:
+  name: epl_one_line_train
+  none_fill: zero
+  data:
+    target_column: match_result
+    season_column: season
+    val_season: 2024-2025
+    tour_column: tour
+    igonre_columns:
+      - ftg
+      - enemy_ftg
+      - s
+      - st
+      - f
+      - c
+      - y
+      - r
+      - enemy_s
+      - enemy_st
+      - enemy_f
+      - enemy_c
+      - enemy_y
+      - enemy_r
+      - ht_w
+      - ht_d
+      - ht_l
+      - date
+      - season
+      - referee
+      - team
+      - enemy_team
+train:
+  kfold_steps: 10
+  batch_size: 2
+  n_epochs: 10
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 3e-4
+  weight_decay: 1e-4
+scheduler:
+  _target_: torch.optim.lr_scheduler.LinearLR
+  start_factor: 1.0
+  end_factor: 0.01
+  total_iters: ${train.n_epochs}
+criterion:
+  _target_: torch.nn.CrossEntropyLoss

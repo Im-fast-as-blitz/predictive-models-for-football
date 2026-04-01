@@ -17,6 +17,48 @@ FastAPI приложение для предсказания результат�
 * Endpoint `/teams` - список доступных команд
 * Docker контейнеризация
 
+## Запуск обучения
+
+### Установка
+
+0. (Optional) Создайте и активируйте новое окружение `venv` ([`+pyenv`](https://github.com/pyenv/pyenv)).
+
+   a. `venv` (`+pyenv`) version:
+
+   ```bash
+   # create env
+   ~/.pyenv/versions/PYTHON_VERSION/bin/python3 -m venv project_env
+
+   # alternatively, using default python version
+   python3 -m venv project_env
+
+   # activate env
+   source project_env/bin/activate
+   ```
+
+1. Установите все необходимые пакеты:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+
+### Как использовать
+
+Для обучения модели в терминале введите команду:
+
+```bash
+python3 train.py --config CONFIG_NAME
+```
+
+Где `CONFIG_NAME` это имя файла конфига из папки `src/configs`.
+
+Например для обчения base модели:
+```bash
+python3 train.py --config base
+```
+
+
 ## Развертывание
 
 ### Docker Compose
