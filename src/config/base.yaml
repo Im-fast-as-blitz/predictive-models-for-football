@@ -1,6 +1,8 @@
 model:
   hidden_size: 768
   out_features: 3
+  n_heads: 8
+  dropout: 0.1
 dataset:
   name: epl_one_line_train
   none_fill: zero
