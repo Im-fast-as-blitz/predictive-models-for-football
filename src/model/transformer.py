@@ -16,10 +16,12 @@ class ITransformer(nn.Module):
         self.hidden_size = args["hidden_size"]
         self.out_features = args["out_features"]
         self.seq_len = seq_len
+        self.feat_dim = args.get("variate_feat_dim", 1)
         self.d_ff = args.get("dim_feedforward", 4 * self.hidden_size)
 
         self.embeder = InvertedDataEmbedding(
-            t=seq_len,
+            seq_len=seq_len,
+            feat_dim=self.feat_dim,
             hidden_size=self.hidden_size,
             dropout=dropout,
         )
@@ -32,7 +34,7 @@ class ITransformer(nn.Module):
         )
 
     def forward(self, x):
-        # [B, T, N] -> [B, N, D]
+        # [B, N, T, F] или [B, N, T] при feat_dim=1 -> [B, N, D]
         x = self.embeder(x)
         x = x + self.ffn(self.norm(x))
         return x
