@@ -4,6 +4,7 @@ model:
 dataset:
   name: epl_one_line_train
   none_fill: zero
+  seq_len: 3
   data:
     target_column: match_result
     season_column: season
