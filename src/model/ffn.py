@@ -1,5 +1,3 @@
-from typing import Optional
-
 import torch.nn as nn
 
 
@@ -7,7 +5,7 @@ class FeedForward(nn.Module):
     def __init__(
         self,
         d_model: int,
-        d_ff: Optional[int] = None,
+        d_ff: int = None,
         dropout: float = 0.1,
     ):
         super().__init__()

@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from src.dataset import PandasDataset
 from src.utils import parse_args, get_optimizer, get_scheduler, get_criterion
-from src.model import Transformer
+from src.model import ITransformer
 from src.utils import train_epoch, test
 
 def train():
@@ -29,7 +29,7 @@ def train():
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-        model = Transformer(args["model"], len(train_dataset.feature_cols))
+        model = ITransformer(args["model"], len(train_dataset.feature_cols))
         optimizer = get_optimizer(args["optimizer"], model)
 
         if "scheduler" in args.keys():
