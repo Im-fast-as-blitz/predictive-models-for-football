@@ -111,4 +111,5 @@ outputs/
 # editor, os cache directory
 .vscode/
 .idea/
-__MACOSX/
+__MACOSX/notebooks/time siries catboost/selected_leagues_one_line.csv
+notebooks/time siries catboost/epl_one_line.csv
