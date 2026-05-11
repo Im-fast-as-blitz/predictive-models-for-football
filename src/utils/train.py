@@ -1,14 +1,18 @@
+from tqdm import tqdm
+
 def train_epoch(model, optimizer, train_loader, device, criterion):
     loss_log = []
     acc_log = []
     model.train()
 
-    for data, target in train_loader:
-      data = data.to(device)
+    for node_features, adj, hist, target in tqdm(train_loader):
+      node_features = node_features.to(device)
+      adj = adj.to(device)
+      hist = hist.to(device)
       target = target.to(device)
 
       optimizer.zero_grad()
-      out = model(data)
+      out = model(node_features)
 
       loss = criterion(out, target)
       loss.backward()

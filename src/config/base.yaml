@@ -1,16 +1,26 @@
 model:
-  hidden_size: 768
+  hidden_size: 512
+  dropout: 0
+  embedder:
+    t: 1
+    mode: stats
+  layer:
+    attention:
+      n_heads: 8
+    ffn:
+      d_ff: 1024
+  L: 4
   out_features: 3
-  variate_feat_dim: 1
 dataset:
-  name: epl_one_line_train
+  name: selected_leagues_one_line
   none_fill: zero
-  seq_len: 5
   data:
     target_column: match_result
     season_column: season
     val_season: 2024-2025
-    tour_column: tour
+    depth: 1
+    cat_columns:
+      - league_code
     igonre_columns:
       - ftg
       - enemy_ftg
@@ -36,7 +46,7 @@ dataset:
       - enemy_team
 train:
   kfold_steps: 10
-  batch_size: 2
+  batch_size: 32
   n_epochs: 10
 optimizer:
   _target_: torch.optim.Adam

@@ -4,43 +4,55 @@ import torch.nn as nn
 
 class InvertedDataEmbedding(nn.Module):
     """
-    Вход (два варианта):
-      - [B, N, T, F] — N variates, T шагов, F признаков на шаг;
-      - [B, N, T] — добавляется ось F=1.
+    Вход (три варианта):
+      mode: ts_full - [B, N, T, F] — N variates, T шагов, F признаков на шаг;
+      mode: ts - [B, N, T] — добавляется ось F=1;
+      mode: stats - [B, N, F] — добавляется ось T=1.
     Выход: [B, N, D]
     """
 
     def __init__(
         self,
-        seq_len: int,
+        args,
         feat_dim: int,
         hidden_size: int,
         dropout: float = 0.1,
     ):
         super().__init__()
-        self.seq_len = seq_len
+        self.t = args["t"]
         self.feat_dim = feat_dim
-        self.value_embedding = nn.Linear(seq_len * feat_dim, hidden_size)
+        self.mode = args["mode"]
+
+        self.value_embedding = nn.Linear(self.t * self.feat_dim, hidden_size)
         self.activation = nn.GELU()
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() == 3:
-            if self.feat_dim != 1:
-                raise ValueError(
-                    f"Вход [B, N, T] только при feat_dim=1; "
-                    f"сейчас feat_dim={self.feat_dim}, передай [B, N, T, {self.feat_dim}]."
-                )
-            x = x.unsqueeze(-1)
-        elif x.dim() != 4:
+            if self.mode == "ts":
+                if self.feat_dim != 1:
+                    raise ValueError(
+                        f"Вход [B, N, T] только при feat_dim=1; "
+                        f"сейчас feat_dim={self.feat_dim}, передай [B, N, T, {self.feat_dim}]."
+                    )
+                x = x.unsqueeze(-1)
+            if self.mode == "stats":
+                if self.t != 1:
+                    raise ValueError(
+                        f"Вход [B, N, F] только при t=1; "
+                        f"сейчас t={self.feat_dim}, передай [B, N, T, {self.feat_dim}]."
+                    )
+                x = x.unsqueeze(-2)
+            
+        if self.mode == "ts_full" and x.dim() != 4:
             raise ValueError(
-                f"Ожидается [B, N, T] или [B, N, T, F], получили {tuple(x.shape)}"
+                f"Ожидается [B, N, T, F], получили {tuple(x.shape)}"
             )
 
         B, N, T, F = x.shape
-        if T != self.seq_len or F != self.feat_dim:
+        if T != self.t or F != self.feat_dim:
             raise ValueError(
-                f"Ожидалось T={self.seq_len}, F={self.feat_dim}, получили T={T}, F={F}"
+                f"Ожидалось T={self.t}, F={self.feat_dim}, получили T={T}, F={F}"
             )
 
         x = x.reshape(B, N, T * F)

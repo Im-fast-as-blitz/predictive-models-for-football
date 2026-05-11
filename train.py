@@ -21,9 +21,9 @@ def train():
     n_epochs = args["train"]["n_epochs"]
 
     for i in range(kfold_steps):
-        train_dataset = PandasDataset(args=args["dataset"], kfold_step=kfold_steps - i - 1, train="train")
-        val_dataset = PandasDataset(args=args["dataset"], kfold_step=kfold_steps - i - 1, train="val")
-        test_dataset = PandasDataset(args=args["dataset"], kfold_step=kfold_steps - i - 1, train="test")
+        train_dataset = PandasDataset(args=args["dataset"], kfold_step=i+1, kfold_steps=kfold_steps, train="train")
+        val_dataset = PandasDataset(args=args["dataset"], kfold_step=i+1, kfold_steps=kfold_steps, train="val")
+        test_dataset = PandasDataset(args=args["dataset"], kfold_step=i+1, kfold_steps=kfold_steps, train="test")
 
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)

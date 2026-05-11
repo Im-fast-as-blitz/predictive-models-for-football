@@ -6,26 +6,33 @@ from torch.utils.data import Dataset
 
 
 class PandasDataset(Dataset):
-    def __init__(self, args, kfold_step, train):
+    def __init__(self, args, kfold_step, kfold_steps, train):
         dataset_name = args["name"]
         none_fill = args["none_fill"]
 
         self.df = pd.read_csv(f"data/{dataset_name}.csv")
 
         self.df = self.df[self.df[args["data"]["season_column"]] <= args["data"]["val_season"]]
-        max_tour = self.df[self.df[args["data"]["season_column"]] == args["data"]["val_season"]][args["data"]["tour_column"]].max()
+
+        fold_size = self.df[self.df[args["data"]["season_column"]] == args["data"]["val_season"]].shape[0] // kfold_steps
+        train_date_thr = ""
+        for date in sorted(self.df[self.df[args["data"]["season_column"]] == args["data"]["val_season"]]["date"].unique()):
+            if train_date_thr != "" and self.df[(self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df["date"] <= date)].shape[0] > fold_size * kfold_step:
+                break
+            train_date_thr = date
+
         if train == "train":
-            self.df = self.df[~((self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df[args["data"]["tour_column"]] >= max_tour - kfold_step - 1))]
+            self.df = self.df[~((self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df["date"] >= train_date_thr))]
         elif train == "val":
-            self.df = self.df[(self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df[args["data"]["tour_column"]] == max_tour - kfold_step - 1)]
+            self.df = self.df[(self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df["date"] == train_date_thr)]
         elif train == "test":
-            self.df = self.df[(self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df[args["data"]["tour_column"]] == max_tour - kfold_step)]
+            self.df = self.df[(self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df["date"] > train_date_thr)]
         else:
             raise Exception("Unknown Split data strategy")
 
         self.df = self.df.reset_index(drop=True)
 
-        self.depth = args["data"].get("depth", 1)
+        self.depth = args["data"]["depth"]
         team_col = args["data"].get("team_column", "team")
         enemy_col = args["data"].get("enemy_column", "enemy_team")
 
@@ -35,6 +42,10 @@ class PandasDataset(Dataset):
 
         self.df = self.df.drop(columns=args["data"]["igonre_columns"])
 
+        # TODO нормально сделать кат фичи
+        self.cat_columns = args["data"]["cat_columns"]
+        self.df = self.df.drop(columns=self.cat_columns) # пока просто удаляем но это плохо!
+
         self.target_col = args["data"]["target_column"]
         self.feature_cols = [col for col in self.df.columns if col != self.target_col]
 
@@ -43,6 +54,7 @@ class PandasDataset(Dataset):
         else:
             raise Exception("Unknown strategy for fill none")
 
+        # TODO неверно будет работать для test/val датасета
         # team -> список индексов в порядке (df уже отсортирован по team, date)
         self.team_to_indices = {}
         for i in range(len(self.df)):

@@ -6,18 +6,20 @@ def test(model, loader, device, criterion):
     acc_log = []
     model.eval()
 
-    for data, target in loader:
-        data = data.to(device)
+    for node_features, adj, hist, target in loader:
+        node_features = node_features.to(device)
+        adj = adj.to(device)
+        hist = hist.to(device)
         target = target.to(device)
 
         with torch.no_grad():
-          out = model(data)
-          loss = criterion(out, target)
+            out = model(node_features)
+            loss = criterion(out, target)
 
-          pred = out.argmax(dim=1)
-          acc = (pred == target).float().mean()
+            pred = out.argmax(dim=1)
+            acc = (pred == target).float().mean()
 
-          acc_log.append(acc.item())
-          loss_log.append(loss.item())
+            acc_log.append(acc.item())
+            loss_log.append(loss.item())
 
     return np.mean(loss_log), np.mean(acc_log)

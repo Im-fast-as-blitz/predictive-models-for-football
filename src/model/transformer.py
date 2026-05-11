@@ -1,40 +1,38 @@
 import torch.nn as nn
 
-from src.model import InvertedDataEmbedding
-from src.model.ffn import FeedForward
+from src.model.embedding import InvertedDataEmbedding
+from src.model.layer import Layer
 
 
 class ITransformer(nn.Module):
-    """
-    Пока только inverted embedding и FFN.
-    Остальное — в TODO ниже.
-    """
-
-    def __init__(self, args, seq_len: int, dropout: float = 0.1):
+    def __init__(self, args, feat_dim: int):
         super(ITransformer, self).__init__()
 
+        self.dropout = args["dropout"]
         self.hidden_size = args["hidden_size"]
         self.out_features = args["out_features"]
-        self.seq_len = seq_len
-        self.feat_dim = args.get("variate_feat_dim", 1)
-        self.d_ff = args.get("dim_feedforward", 4 * self.hidden_size)
 
+        self.feat_dim = feat_dim
         self.embeder = InvertedDataEmbedding(
-            seq_len=seq_len,
-            feat_dim=self.feat_dim,
+            args=args["embedder"],
+            feat_dim=feat_dim,
             hidden_size=self.hidden_size,
-            dropout=dropout,
+            dropout=self.dropout,
         )
 
-        self.norm = nn.LayerNorm(self.hidden_size)
-        self.ffn = FeedForward(
-            d_model=self.hidden_size,
-            d_ff=self.d_ff,
-            dropout=dropout,
-        )
+        layers = []
+        for _ in range(args["L"]):
+            layers.append(Layer(args["layer"], hidden_size=self.hidden_size, dropout=self.dropout))
+        self.base = nn.Sequential(*layers)
+        
+        self.projector = nn.Linear(self.hidden_size, self.out_features)
 
     def forward(self, x):
         # [B, N, T, F] или [B, N, T] при feat_dim=1 -> [B, N, D]
-        x = self.embeder(x)
-        x = x + self.ffn(self.norm(x))
-        return x
+        x = self.embeder(x) # B, N, D
+
+        x = self.base(x)
+
+        x = self.projector(x)
+        
+        return x[:, 0, :]
