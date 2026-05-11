@@ -11,6 +11,7 @@ class ITransformer(nn.Module):
         self.dropout = args["dropout"]
         self.hidden_size = args["hidden_size"]
         self.out_features = args["out_features"]
+        self.pooler = args["pooler"]
 
         self.feat_dim = feat_dim
         self.embeder = InvertedDataEmbedding(
@@ -33,6 +34,12 @@ class ITransformer(nn.Module):
 
         x = self.base(x)
 
-        x = self.projector(x)
+        if self.pooler == "avg":
+            pooled = x.mean(dim=1)     # [B, N, D] → [B, D]
+        elif self.pooler == "one_token":
+            pooled = x[:, 0, :]
+        else:
+            raise Exception("Unknown pooler type")
+        out = self.projector(pooled)
         
-        return x[:, 0, :]
+        return out

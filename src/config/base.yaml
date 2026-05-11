@@ -10,6 +10,7 @@ model:
     ffn:
       d_ff: 1024
   L: 4
+  pooler: one_token
   out_features: 3
 dataset:
   name: selected_leagues_one_line
