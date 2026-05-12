@@ -10,41 +10,53 @@ class PandasDataset(Dataset):
         dataset_name = args["name"]
         none_fill = args["none_fill"]
 
-        self.df = pd.read_csv(f"data/{dataset_name}.csv")
+        season_col = args["data"]["season_column"]
+        team_col = args["data"].get("team_column", "team")
+        enemy_col = args["data"].get("enemy_column", "enemy_team")
 
-        self.df = self.df[self.df[args["data"]["season_column"]] <= args["data"]["val_season"]]
+        df_full = pd.read_csv(f"data/{dataset_name}.csv")
+        df_full = df_full[df_full[season_col] <= args["data"]["val_season"]].reset_index(drop=True)
 
-        fold_size = self.df[self.df[args["data"]["season_column"]] == args["data"]["val_season"]].shape[0] // kfold_steps
+        val_df = df_full[df_full[season_col] == args["data"]["val_season"]]
+        fold_size = val_df.shape[0] // kfold_steps
         train_date_thr = ""
-        for date in sorted(self.df[self.df[args["data"]["season_column"]] == args["data"]["val_season"]]["date"].unique()):
-            if train_date_thr != "" and self.df[(self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df["date"] <= date)].shape[0] > fold_size * kfold_step:
+        for date in sorted(val_df["date"].unique()):
+            if train_date_thr != "" and val_df[val_df["date"] <= date].shape[0] > fold_size * kfold_step:
                 break
             train_date_thr = date
 
         if train == "train":
-            self.df = self.df[~((self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df["date"] >= train_date_thr))]
+            split_mask = ~(
+                (df_full[season_col] == args["data"]["val_season"])
+                & (df_full["date"] >= train_date_thr)
+            )
         elif train == "val":
-            self.df = self.df[(self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df["date"] == train_date_thr)]
+            split_mask = (
+                (df_full[season_col] == args["data"]["val_season"])
+                & (df_full["date"] == train_date_thr)
+            )
         elif train == "test":
-            self.df = self.df[(self.df[args["data"]["season_column"]] == args["data"]["val_season"]) & (self.df["date"] > train_date_thr)]
+            split_mask = (
+                (df_full[season_col] == args["data"]["val_season"])
+                & (df_full["date"] > train_date_thr)
+            )
         else:
             raise Exception("Unknown Split data strategy")
 
-        self.df = self.df.reset_index(drop=True)
+        # Индексы строк сплита внутри полного df_full
+        self.split_indices = list(df_full[split_mask].index)
 
         self.depth = args["data"]["depth"]
-        team_col = args["data"].get("team_column", "team")
-        enemy_col = args["data"].get("enemy_column", "enemy_team")
 
-        # сохраняем до дропа, т.к. team/enemy_team в ignore_columns
-        self.teams = self.df[team_col].values.copy()
-        self.enemies = self.df[enemy_col].values.copy()
+        # Полные массивы — BFS обращается к self.enemies[prev_idx] по индексу в df_full
+        self.teams = df_full[team_col].values.copy()
+        self.enemies = df_full[enemy_col].values.copy()
 
-        self.df = self.df.drop(columns=args["data"]["igonre_columns"])
+        self.df = df_full.drop(columns=args["data"]["igonre_columns"])
 
         # TODO нормально сделать кат фичи
         self.cat_columns = args["data"]["cat_columns"]
-        self.df = self.df.drop(columns=self.cat_columns) # пока просто удаляем но это плохо!
+        self.df = self.df.drop(columns=self.cat_columns)  # пока просто удаляем но это плохо!
 
         self.target_col = args["data"]["target_column"]
         self.feature_cols = [col for col in self.df.columns if col != self.target_col]
@@ -54,20 +66,18 @@ class PandasDataset(Dataset):
         else:
             raise Exception("Unknown strategy for fill none")
 
-        # TODO неверно будет работать для test/val датасета
-        # team -> список индексов в порядке (df уже отсортирован по team, date)
+        # Индексы строятся по всему df — история полностью доступна для val/test
         self.team_to_indices = {}
         for i in range(len(self.df)):
             self.team_to_indices.setdefault(self.teams[i], []).append(i)
 
-        # (team, enemy) -> список индексов матчей между ними по порядку
         self.pair_to_indices = {}
         for i in range(len(self.df)):
             key = (self.teams[i], self.enemies[i])
             self.pair_to_indices.setdefault(key, []).append(i)
 
     def __len__(self) -> int:
-        return len(self.df)
+        return len(self.split_indices)
 
     def _get_team_features(self, team: str, up_to_idx: int) -> torch.Tensor:
         indices = self.team_to_indices.get(team, [])
@@ -142,7 +152,6 @@ class PandasDataset(Dataset):
                 hist[level, node, node_opp] = float(encoded)
                 hist[level, node_opp, node] = float(4 - encoded)
 
-                # mirror index of opp → their df row for this match (feat reference point)
                 pair = self.pair_to_indices.get((team, opp), [])
                 pair_mirror = self.pair_to_indices.get((opp, team), [])
                 if prev_idx in pair and pair_mirror:
@@ -172,19 +181,20 @@ class PandasDataset(Dataset):
             if team in team_to_feat_idx:
                 feat_idx = team_to_feat_idx[team]
                 rows = self._get_team_features(team, feat_idx).numpy()  # (depth, F)
-                out[node] = rows[-1]  # берём самую свежую строку из окна
+                out[node] = rows[-1]
         return torch.tensor(out, dtype=torch.float32)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        t1 = self.teams[idx]
-        t2 = self.enemies[idx]
-        target = torch.tensor(self.df.iloc[idx][self.target_col], dtype=torch.long)
+        real_idx = self.split_indices[idx]
+        t1 = self.teams[real_idx]
+        t2 = self.enemies[real_idx]
+        target = torch.tensor(self.df.iloc[real_idx][self.target_col], dtype=torch.long)
 
         t1_pair = self.pair_to_indices[(t1, t2)]
-        match_pos = t1_pair.index(idx)
+        match_pos = t1_pair.index(real_idx)
         t2_idx = self.pair_to_indices[(t2, t1)][match_pos]
 
-        adj, hist, team_to_node, team_to_feat_idx = self._get_graph_features(t1, idx, t2, t2_idx)
+        adj, hist, team_to_node, team_to_feat_idx = self._get_graph_features(t1, real_idx, t2, t2_idx)
         node_features = self._get_all_team_features(team_to_node, team_to_feat_idx)  # (max_n, F)
 
         return node_features, adj, hist, target
