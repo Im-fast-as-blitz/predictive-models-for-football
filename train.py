@@ -29,7 +29,7 @@ def train():
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-        model = ITransformer(args["model"], len(train_dataset.feature_cols))
+        model = ITransformer(args["model"], len(train_dataset.feature_cols)).to(device)
         optimizer = get_optimizer(args["optimizer"], model)
 
         if "scheduler" in args.keys():
