@@ -5,7 +5,6 @@ from collections import deque
 from torch.utils.data import Dataset
 
 
-
 class PandasDataset(Dataset):
     def __init__(self, args, kfold_step, kfold_steps, train):
         dataset_name = args["name"]
