@@ -1,5 +1,5 @@
 """
-Тесты PandasDataset.__getitem__ → (node_features, adj, hist, target)
+Тесты PandasDataset.__getitem__ → (node_features, adj, hist, x_cat, target)
 
 Синтетический датасет:
   idx  team  enemy  result  feat_a  feat_b
@@ -32,14 +32,29 @@ sys.path.insert(0, "src")
 from dataset.dataset import PandasDataset
 
 
-def make_mock_dataset(depth: int) -> PandasDataset:
+def _build_cat_state(ds: PandasDataset, df: pd.DataFrame) -> None:
+    ds.cat_columns = ["league_code"]
+    ds.cat_encoder = {
+        "league_code": {v: i + 1 for i, v in enumerate(pd.unique(df["league_code"].dropna()))},
+    }
+    ds.cat_cardinalities = [
+        max(ds.cat_encoder[col].values(), default=0) + 1 for col in ds.cat_columns
+    ]
+    code_mat = np.zeros((len(df), len(ds.cat_columns)), dtype=np.int64)
+    for j, col in enumerate(ds.cat_columns):
+        mapped = df[col].map(ds.cat_encoder[col])
+        code_mat[:, j] = mapped.fillna(0).astype(np.int64).to_numpy()
+    ds._cat_codes = code_mat
+
+
+def make_mock_dataset(depth: int, with_categories: bool = False) -> PandasDataset:
     rows = [
-        {"team": "A", "enemy_team": "C", "match_result": 2, "feat_a": 1.0,  "feat_b": 2.0},
-        {"team": "C", "enemy_team": "A", "match_result": 0, "feat_a": 3.0,  "feat_b": 4.0},
-        {"team": "B", "enemy_team": "D", "match_result": 0, "feat_a": 5.0,  "feat_b": 6.0},
-        {"team": "D", "enemy_team": "B", "match_result": 2, "feat_a": 7.0,  "feat_b": 8.0},
-        {"team": "A", "enemy_team": "B", "match_result": 1, "feat_a": 9.0,  "feat_b": 10.0},
-        {"team": "B", "enemy_team": "A", "match_result": 1, "feat_a": 11.0, "feat_b": 12.0},
+        {"team": "A", "enemy_team": "C", "match_result": 2, "feat_a": 1.0,  "feat_b": 2.0, "league_code": "E1"},
+        {"team": "C", "enemy_team": "A", "match_result": 0, "feat_a": 3.0,  "feat_b": 4.0, "league_code": "E1"},
+        {"team": "B", "enemy_team": "D", "match_result": 0, "feat_a": 5.0,  "feat_b": 6.0, "league_code": "E2"},
+        {"team": "D", "enemy_team": "B", "match_result": 2, "feat_a": 7.0,  "feat_b": 8.0, "league_code": "E2"},
+        {"team": "A", "enemy_team": "B", "match_result": 1, "feat_a": 9.0,  "feat_b": 10.0, "league_code": "E1"},
+        {"team": "B", "enemy_team": "A", "match_result": 1, "feat_a": 11.0, "feat_b": 12.0, "league_code": "E1"},
     ]
     df = pd.DataFrame(rows)
 
@@ -48,7 +63,17 @@ def make_mock_dataset(depth: int) -> PandasDataset:
     ds.target_col = "match_result"
     ds.teams = df["team"].values
     ds.enemies = df["enemy_team"].values
-    ds.df = df.drop(columns=["team", "enemy_team"])
+
+    if with_categories:
+        _build_cat_state(ds, df)
+        ds.df = df.drop(columns=["team", "enemy_team", "league_code"])
+    else:
+        ds.cat_columns = []
+        ds.cat_encoder = {}
+        ds.cat_cardinalities = []
+        ds._cat_codes = np.zeros((len(df), 0), dtype=np.int64)
+        ds.df = df.drop(columns=["team", "enemy_team"])
+
     ds.feature_cols = ["feat_a", "feat_b"]
 
     ds.team_to_indices = {}
@@ -78,7 +103,7 @@ def check(name: bool, condition: bool, detail: str = ""):
 def test_depth3():
     print("\n=== depth=3, idx=4 (A vs B) ===")
     ds = make_mock_dataset(depth=3)
-    node_features, adj, hist, target = ds[4]
+    node_features, adj, hist, x_cat, target = ds[4]
 
     max_n = 2 ** 3  # 8
     F = 2
@@ -88,9 +113,8 @@ def test_depth3():
           str(tuple(node_features.shape)))
     check("adj shape",           adj.shape == (max_n, max_n))
     check("hist shape",          hist.shape == (2, max_n, max_n))
+    check("x_cat shape", x_cat.shape == (max_n, 1, 0), str(tuple(x_cat.shape)))
     check("target value",        target.item() == 1)
-
-    # adj симметрична
     check("adj symmetric", torch.allclose(adj, adj.T))
 
     # ожидаемые рёбра
@@ -128,7 +152,7 @@ def test_depth3():
 def test_depth2():
     print("\n=== depth=2, idx=4 (A vs B) ===")
     ds = make_mock_dataset(depth=2)
-    node_features, adj, hist, target = ds[4]
+    node_features, adj, hist, x_cat, target = ds[4]
 
     max_n = 2 ** 2  # 4
     check("node_features shape", node_features.shape == (max_n, 2))
@@ -148,7 +172,7 @@ def test_depth2():
 def test_depth1():
     print("\n=== depth=1, idx=4 (A vs B) ===")
     ds = make_mock_dataset(depth=1)
-    node_features, adj, hist, target = ds[4]
+    node_features, adj, hist, x_cat, target = ds[4]
 
     max_n = 2 ** 1  # 2
     check("node_features shape", node_features.shape == (max_n, 2))
@@ -159,8 +183,41 @@ def test_depth1():
     check("node 1 (B) feat_a=11", node_features[1, 0].item() == 11.0)
 
 
+# ─────────────────────────────────────────────
+# категориальные признаки (league_code)
+# ─────────────────────────────────────────────
+def test_categorical():
+    print("\n=== categorical, depth=1, idx=4 (A vs B, league E1) ===")
+    ds = make_mock_dataset(depth=1, with_categories=True)
+
+    check("cat_encoder E1", ds.cat_encoder["league_code"]["E1"] == 1)
+    check("cat_encoder E2", ds.cat_encoder["league_code"]["E2"] == 2)
+    check("cat_cardinalities", ds.cat_cardinalities == [3])  # 0 + E1 + E2
+    check("_cat_codes row 4", ds._cat_codes[4, 0] == 1)
+
+    node_features, adj, hist, x_cat, target = ds[4]
+    max_n = 2
+
+    check("x_cat shape", x_cat.shape == (max_n, 1, 1), str(tuple(x_cat.shape)))
+    check("x_cat dtype", x_cat.dtype == torch.long)
+    check("x_cat all nodes same league", (x_cat == 1).all().item())
+    check("league_code not in df", "league_code" not in ds.df.columns)
+    check("node_features unchanged", node_features[0, 0].item() == 9.0)
+
+
+def test_categorical_reuse_encoder():
+    print("\n=== categorical reuse train encoder ===")
+    train_ds = make_mock_dataset(depth=1, with_categories=True)
+    encoder = train_ds.cat_encoder
+
+    mapped = pd.Series(["E9"]).map(encoder["league_code"]).fillna(0).astype(np.int64).to_numpy()
+    check("unknown league -> 0", mapped[0] == 0)
+
+
 if __name__ == "__main__":
     test_depth3()
     test_depth2()
     test_depth1()
+    test_categorical()
+    test_categorical_reuse_encoder()
     print("\n=== ALL TESTS PASSED ===")
