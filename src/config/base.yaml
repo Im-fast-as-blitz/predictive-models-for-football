@@ -20,6 +20,7 @@ dataset:
     season_column: season
     val_season: 2024-2025
     depth: 1
+    t: 1
     cat_columns:
       - league_code
     igonre_columns:

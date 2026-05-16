@@ -18,7 +18,7 @@ IGNORE_COLS = [
     "team", "enemy_team", "league_code",
 ]
 
-CSV = "notebooks/time siries catboost/selected_leagues_one_line.csv"
+CSV = "data/selected_leagues_one_line.csv"
 DEPTH = 3
 BATCH_SIZE = 4
 
@@ -29,6 +29,7 @@ def build_ds(csv_path: str, depth: int) -> PandasDataset:
 
     ds = object.__new__(PandasDataset)
     ds.depth = depth
+    ds.t = depth
     ds.target_col = "match_result"
     ds.teams = df["team"].values
     ds.enemies = df["enemy_team"].values
@@ -36,6 +37,7 @@ def build_ds(csv_path: str, depth: int) -> PandasDataset:
     drop_cols = [c for c in IGNORE_COLS if c in df.columns]
     ds.df = df.drop(columns=drop_cols).fillna(0)
     ds.feature_cols = [c for c in ds.df.columns if c != ds.target_col]
+    ds.dates = pd.to_datetime(df["date"]).map(lambda d: d.toordinal()).values.astype("float32")
 
     ds.team_to_indices = {}
     for i, t in enumerate(ds.teams):
@@ -46,6 +48,7 @@ def build_ds(csv_path: str, depth: int) -> PandasDataset:
         key = (ds.teams[i], ds.enemies[i])
         ds.pair_to_indices.setdefault(key, []).append(i)
 
+    ds.split_indices = list(range(len(df)))
     return ds
 
 
@@ -62,16 +65,20 @@ if __name__ == "__main__":
     print(f"  node_features : [{BATCH_SIZE}, {max_n}, {n_feats}]")
     print(f"  adj           : [{BATCH_SIZE}, {max_n}, {max_n}]")
     print(f"  hist          : [{BATCH_SIZE}, {DEPTH-1}, {max_n}, {max_n}]")
+    print(f"  timestamps    : [{BATCH_SIZE}, {max_n}, {DEPTH}]")
+    print(f"  full_history  : [{BATCH_SIZE}, {max_n}, {DEPTH}, {n_feats}]")
     print(f"  target        : [{BATCH_SIZE}]")
 
     loader = DataLoader(ds, batch_size=BATCH_SIZE, shuffle=False)
 
     print("\nПроходим первые 3 батча...")
-    for batch_idx, (node_features, adj, hist, target) in enumerate(loader):
+    for batch_idx, (node_features, adj, hist, timestamps, full_history, target) in enumerate(loader):
         print(f"\n  Батч {batch_idx}:")
         print(f"    node_features : {tuple(node_features.shape)}")
         print(f"    adj           : {tuple(adj.shape)}")
         print(f"    hist          : {tuple(hist.shape)}")
+        print(f"    timestamps    : {tuple(timestamps.shape)}")
+        print(f"    full_history  : {tuple(full_history.shape)}")
         print(f"    target        : {tuple(target.shape)}  значения={target.tolist()}")
 
         # adj симметрична
@@ -101,7 +108,7 @@ if __name__ == "__main__":
     # берём матч из середины — точно есть история с обеих сторон
     sample_idx = candidates.index[len(candidates) // 2]
 
-    node_features_s, adj_s, hist_s, target_s = ds[sample_idx]
+    node_features_s, adj_s, hist_s, timestamps_s, full_history_s, target_s = ds[sample_idx]
     date = raw.iloc[sample_idx]["date"]
     print(f"\nМатч Arsenal vs Chelsea [{date}], target={target_s.item()}")
     print(f"(0=проиграл, 1=ничья, 2=выиграл — с точки зрения Arsenal)")
