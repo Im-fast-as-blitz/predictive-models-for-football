@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 
 
 class PandasDataset(Dataset):
-    def __init__(self, args, kfold_step, kfold_steps, train):
+    def __init__(self, args, kfold_step, kfold_steps, train, cat_encoder=None):
         dataset_name = args["name"]
         none_fill = args["none_fill"]
 
@@ -55,10 +55,34 @@ class PandasDataset(Dataset):
 
         self.df = df_full.drop(columns=args["data"]["igonre_columns"])
 
-        # TODO нормально сделать кат фичи
-        self.cat_columns = args["data"]["cat_columns"]
-        self.df = self.df.drop(columns=self.cat_columns)  # пока просто удаляем но это плохо!
-        self._cat_codes = np.zeros((len(self.df), 0), dtype=np.int64)
+        self.cat_columns = list(args["data"].get("cat_columns") or [])
+        if self.cat_columns:
+            missing = [c for c in self.cat_columns if c not in self.df.columns]
+            if missing:
+                raise ValueError(f"cat_columns отсутствуют в CSV: {missing}")
+            if cat_encoder is None:
+                self.cat_encoder = {}
+                for col in self.cat_columns:
+                    vals = pd.unique(self.df[col].dropna())
+                    self.cat_encoder[col] = {v: i + 1 for i, v in enumerate(vals)}
+            elif isinstance(cat_encoder, dict):
+                self.cat_encoder = cat_encoder
+            else:
+                raise TypeError("cat_encoder: None (построить по сплиту) или dict с train.")
+            self.cat_cardinalities = [
+                max(self.cat_encoder[col].values(), default=0) + 1
+                for col in self.cat_columns
+            ]
+            code_mat = np.zeros((len(self.df), len(self.cat_columns)), dtype=np.int64)
+            for j, col in enumerate(self.cat_columns):
+                mapped = self.df[col].map(self.cat_encoder[col])
+                code_mat[:, j] = mapped.fillna(0).astype(np.int64).to_numpy()
+            self._cat_codes = code_mat
+            self.df = self.df.drop(columns=self.cat_columns)
+        else:
+            self.cat_encoder = {}
+            self.cat_cardinalities = []
+            self._cat_codes = np.zeros((len(self.df), 0), dtype=np.int64)
 
         self.target_col = args["data"]["target_column"]
         self.feature_cols = [col for col in self.df.columns if col != self.target_col]
@@ -191,8 +215,8 @@ class PandasDataset(Dataset):
     def _get_all_team_timestamps(
         self, team_to_node: dict, team_to_feat_idx: dict
     ) -> torch.Tensor:
-        """Returns [max_n, depth] — ordinal dates of last `depth` matches per team.
-        If team has fewer than depth matches, pads left by repeating the earliest date.
+        """Returns [max_n, T] — ordinal dates of last `t` matches per team.
+        If team has fewer than t matches, pads left by repeating the earliest date.
         Teams with no matches at all get a zero row."""
         max_n = 2 ** self.depth
         out = np.zeros((max_n, self.t), dtype=np.float32)
@@ -214,8 +238,8 @@ class PandasDataset(Dataset):
     def _get_all_team_full_history(
         self, team_to_node: dict, team_to_feat_idx: dict
     ) -> torch.Tensor:
-        """Returns [max_n, depth, F] — full match history per team.
-        Teams with fewer than depth matches are zero-padded on the left."""
+        """Returns [max_n, T, F] — full match history per team.
+        Teams with fewer than t matches are zero-padded on the left."""
         max_n = 2 ** self.depth
         n_features = len(self.feature_cols)
         out = np.zeros((max_n, self.t, n_features), dtype=np.float32)

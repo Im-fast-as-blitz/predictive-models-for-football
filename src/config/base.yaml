@@ -4,6 +4,7 @@ model:
   embedder:
     t: 1
     mode: stats
+    cat_emb_dim: 8
   layer:
     attention:
       n_heads: 8

@@ -18,9 +18,26 @@ DEPTH = 8
 with open("src/config/base.yaml") as f:
     CONFIG = yaml.safe_load(f)
 IGNORE_COLS = CONFIG["dataset"]["data"]["igonre_columns"]
+CAT_COLUMNS = list(CONFIG["dataset"]["data"].get("cat_columns") or [])
 
 
-def build_ds(csv_path: str, depth: int) -> PandasDataset:
+def _build_cat_state(ds: PandasDataset, df: pd.DataFrame) -> None:
+    ds.cat_columns = list(CAT_COLUMNS)
+    ds.cat_encoder = {
+        col: {v: i + 1 for i, v in enumerate(pd.unique(df[col].dropna()))}
+        for col in ds.cat_columns
+    }
+    ds.cat_cardinalities = [
+        max(ds.cat_encoder[col].values(), default=0) + 1 for col in ds.cat_columns
+    ]
+    code_mat = np.zeros((len(df), len(ds.cat_columns)), dtype=np.int64)
+    for j, col in enumerate(ds.cat_columns):
+        mapped = df[col].map(ds.cat_encoder[col])
+        code_mat[:, j] = mapped.fillna(0).astype(np.int64).to_numpy()
+    ds._cat_codes = code_mat
+
+
+def build_ds(csv_path: str, depth: int, with_categories: bool = False) -> PandasDataset:
     df = pd.read_csv(csv_path)
     df = df.sort_values(["team", "date"]).reset_index(drop=True)
 
@@ -31,8 +48,20 @@ def build_ds(csv_path: str, depth: int) -> PandasDataset:
     ds.teams = df["team"].values
     ds.enemies = df["enemy_team"].values
 
-    drop_cols = [c for c in IGNORE_COLS + ["league_code"] if c in df.columns]
-    ds.df = df.drop(columns=drop_cols).fillna(0)
+    drop_cols = [c for c in IGNORE_COLS if c in df.columns]
+    if not with_categories:
+        drop_cols += [c for c in CAT_COLUMNS if c in df.columns]
+
+    if with_categories and CAT_COLUMNS:
+        _build_cat_state(ds, df)
+        ds.df = df.drop(columns=drop_cols + CAT_COLUMNS).fillna(0)
+    else:
+        ds.cat_columns = []
+        ds.cat_encoder = {}
+        ds.cat_cardinalities = []
+        ds._cat_codes = np.zeros((len(df), 0), dtype=np.int64)
+        ds.df = df.drop(columns=drop_cols).fillna(0)
+
     ds.feature_cols = [c for c in ds.df.columns if c != ds.target_col]
     ds.dates = pd.to_datetime(df["date"]).map(lambda d: d.toordinal()).values.astype(np.float32)
     ds._raw_df = df
@@ -66,7 +95,11 @@ def run(ds: PandasDataset, idx: int):
     print(f"{'='*65}")
 
     t0 = time.time()
+<<<<<<< HEAD
     node_features, adj, hist, timestamps, full_history, target = ds[idx]
+=======
+    node_features, adj, hist, x_cat, target = ds[idx]
+>>>>>>> main
     elapsed = time.time() - t0
 
     result_label = {0: "проиграл", 1: "ничья", 2: "победил"}
@@ -77,8 +110,12 @@ def run(ds: PandasDataset, idx: int):
     print(f"    node_features : {tuple(node_features.shape)}")
     print(f"    adj           : {tuple(adj.shape)}")
     print(f"    hist          : {tuple(hist.shape)}")
+<<<<<<< HEAD
     print(f"    timestamps    : {tuple(timestamps.shape)}")
     print(f"    full_history  : {tuple(full_history.shape)}")
+=======
+    print(f"    x_cat         : {tuple(x_cat.shape)}")
+>>>>>>> main
 
     # восстанавливаем team_to_node
     t1_pair   = ds.pair_to_indices[(t1, t2)]

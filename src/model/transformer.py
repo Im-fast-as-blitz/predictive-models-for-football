@@ -5,7 +5,7 @@ from src.model.layer import Layer
 
 
 class ITransformer(nn.Module):
-    def __init__(self, args, feat_dim: int):
+    def __init__(self, args, feat_dim: int, cat_cardinalities=()):
         super(ITransformer, self).__init__()
 
         self.dropout = args["dropout"]
@@ -14,10 +14,12 @@ class ITransformer(nn.Module):
         self.pooler = args["pooler"]
 
         self.feat_dim = feat_dim
+        emb_cfg = args["embedder"]
         self.embeder = InvertedDataEmbedding(
-            args=args["embedder"],
+            args=emb_cfg,
             feat_dim=feat_dim,
             hidden_size=self.hidden_size,
+            cat_cardinalities=list(cat_cardinalities),
             dropout=self.dropout,
         )
 
@@ -28,9 +30,11 @@ class ITransformer(nn.Module):
         
         self.projector = nn.Linear(self.hidden_size, self.out_features)
 
-    def forward(self, x):
-        # [B, N, T, F] или [B, N, T] при feat_dim=1 -> [B, N, D]
-        x = self.embeder(x) # B, N, D
+    def forward(self, x, x_cat):
+        # x: [B, N, T, F] или [B, N, T] при feat_dim=1
+        #                                             -> [B, N, D]
+        # x_cat: [B, N, T, C]
+        x = self.embeder(x, x_cat) # B, N, D
 
         x = self.base(x)
 

@@ -21,15 +21,37 @@ def train():
     n_epochs = args["train"]["n_epochs"]
 
     for i in range(kfold_steps):
-        train_dataset = PandasDataset(args=args["dataset"], kfold_step=i+1, kfold_steps=kfold_steps, train="train")
-        val_dataset = PandasDataset(args=args["dataset"], kfold_step=i+1, kfold_steps=kfold_steps, train="val")
-        test_dataset = PandasDataset(args=args["dataset"], kfold_step=i+1, kfold_steps=kfold_steps, train="test")
+        train_dataset = PandasDataset(
+            args=args["dataset"],
+            kfold_step=i + 1,
+            kfold_steps=kfold_steps,
+            train="train",
+            cat_encoder=None,
+        )
+        val_dataset = PandasDataset(
+            args=args["dataset"],
+            kfold_step=i+1,
+            kfold_steps=kfold_steps,
+            train="val",
+            cat_encoder=train_dataset.cat_encoder,
+        )
+        test_dataset = PandasDataset(
+            args=args["dataset"],
+            kfold_step=i+1,
+            kfold_steps=kfold_steps,
+            train="test",
+            cat_encoder=train_dataset.cat_encoder,
+        )
 
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-        model = ITransformer(args["model"], len(train_dataset.feature_cols)).to(device)
+        model = ITransformer(
+            args["model"],
+            len(train_dataset.feature_cols),
+            cat_cardinalities=train_dataset.cat_cardinalities,
+        ).to(device)
         optimizer = get_optimizer(args["optimizer"], model)
 
         if "scheduler" in args.keys():
