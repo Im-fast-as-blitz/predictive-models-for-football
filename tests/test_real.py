@@ -95,11 +95,7 @@ def run(ds: PandasDataset, idx: int):
     print(f"{'='*65}")
 
     t0 = time.time()
-<<<<<<< HEAD
-    node_features, adj, hist, timestamps, full_history, target = ds[idx]
-=======
-    node_features, adj, hist, x_cat, target = ds[idx]
->>>>>>> main
+    node_features, adj, hist, timestamps, full_history, x_cat, target = ds[idx]
     elapsed = time.time() - t0
 
     result_label = {0: "проиграл", 1: "ничья", 2: "победил"}
@@ -110,12 +106,9 @@ def run(ds: PandasDataset, idx: int):
     print(f"    node_features : {tuple(node_features.shape)}")
     print(f"    adj           : {tuple(adj.shape)}")
     print(f"    hist          : {tuple(hist.shape)}")
-<<<<<<< HEAD
     print(f"    timestamps    : {tuple(timestamps.shape)}")
     print(f"    full_history  : {tuple(full_history.shape)}")
-=======
     print(f"    x_cat         : {tuple(x_cat.shape)}")
->>>>>>> main
 
     # восстанавливаем team_to_node
     t1_pair   = ds.pair_to_indices[(t1, t2)]
