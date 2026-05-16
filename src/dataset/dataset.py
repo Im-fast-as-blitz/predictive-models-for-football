@@ -58,6 +58,7 @@ class PandasDataset(Dataset):
         # TODO нормально сделать кат фичи
         self.cat_columns = args["data"]["cat_columns"]
         self.df = self.df.drop(columns=self.cat_columns)  # пока просто удаляем но это плохо!
+        self._cat_codes = np.zeros((len(self.df), 0), dtype=np.int64)
 
         self.target_col = args["data"]["target_column"]
         self.feature_cols = [col for col in self.df.columns if col != self.target_col]
