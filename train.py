@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.dataset import PandasDataset
-from src.utils import parse_args, get_optimizer, get_scheduler, get_criterion
+from src.utils import parse_args, get_optimizer, get_scheduler, get_criterion, get_logger
 from src.model import ITransformer
 from src.utils import train_epoch, test
 
@@ -21,6 +21,8 @@ def train():
     n_epochs = args["train"]["n_epochs"]
 
     for i in range(kfold_steps):
+        logger = get_logger(args["logger"])
+        
         train_dataset = PandasDataset(
             args=args["dataset"],
             kfold_step=i + 1,
@@ -70,6 +72,8 @@ def train():
         print(f"Fold number {i + 1}\n")
 
         for epoch in range(n_epochs):
+            logger.set_step(epoch, mode="train")
+
             train_loss, train_acc = train_epoch(model, optimizer, train_dataloader, device, criterion)
             val_loss, val_acc = test(model, val_dataloader, device, criterion)
 
@@ -78,6 +82,14 @@ def train():
 
             val_loss_log.append(val_loss)
             val_acc_log.append(val_acc)
+
+            logger.add_scalars({
+                "train_loss": np.mean(train_loss),
+                "train_accuracy": np.mean(train_acc),
+                "val_loss": val_loss,
+                "val_accuracy": val_acc,
+                "lr": optimizer.param_groups[0]["lr"]
+            })
 
             print(f"Epoch {epoch}")
             print(f" train loss: {np.mean(train_loss)}, train acc: {np.mean(train_acc)}")
@@ -90,6 +102,13 @@ def train():
         print("- " * 25)
         print(f"test loss: {np.mean(test_loss)}, test acc: {np.mean(test_acc)}")
         print("- " * 25)
+
+        logger.add_scalars({
+            "test_loss": np.mean(test_loss),
+            "test_accuracy": np.mean(test_acc),
+        })
+
+        logger.finish()
 
 
 if __name__ == "__main__":

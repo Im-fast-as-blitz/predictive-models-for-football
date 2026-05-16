@@ -3,6 +3,8 @@ from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
 import torch
 
+from src.logger.wandb import WandBWriter
+
 
 def get_optimizer(cfg: DictConfig, model: torch.nn.Module) -> torch.optim.Optimizer:
     return instantiate(cfg, params=model.parameters())
@@ -12,6 +14,9 @@ def get_scheduler(cfg: DictConfig, optimizer: torch.optim.Optimizer):
 
 def get_criterion(cfg: DictConfig) -> torch.nn.Module:
     return instantiate(cfg)
+
+def get_logger(cfg: DictConfig):
+    return WandBWriter(**cfg)
 
 def load_config(config_name: str) -> DictConfig:
     config_path = f"src/config/{config_name}.yaml"

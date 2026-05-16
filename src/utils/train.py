@@ -23,4 +23,5 @@ def train_epoch(model, optimizer, train_loader, device, criterion):
       acc = (pred == target).float().mean()
       acc_log.append(acc.item())
       loss_log.append(loss.item())
+
     return loss_log, acc_log

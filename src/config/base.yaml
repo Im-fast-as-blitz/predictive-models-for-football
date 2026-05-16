@@ -48,7 +48,7 @@ dataset:
       - team
       - enemy_team
 train:
-  kfold_steps: 10
+  kfold_steps: 1
   batch_size: 32
   n_epochs: 10
 optimizer:
@@ -62,3 +62,9 @@ scheduler:
   total_iters: ${train.n_epochs}
 criterion:
   _target_: torch.nn.CrossEntropyLoss
+logger:
+  project_name: "socer_project"
+  entity: null
+  run_name: "test_run"
+  mode: "online"
+  loss_names: ["loss"]
