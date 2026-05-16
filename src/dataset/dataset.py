@@ -238,8 +238,12 @@ class PandasDataset(Dataset):
         t2_idx = self.pair_to_indices[(t2, t1)][match_pos]
 
         adj, hist, team_to_node, team_to_feat_idx = self._get_graph_features(t1, real_idx, t2, t2_idx)
-        node_features = self._get_all_team_features(team_to_node, team_to_feat_idx)   # [max_n, F]
-        timestamps = self._get_all_team_timestamps(team_to_node, team_to_feat_idx)    # [max_n, depth]
-        full_history = self._get_all_team_full_history(team_to_node, team_to_feat_idx)  # [max_n, K, F]
+        node_features = self._get_all_team_features(team_to_node, team_to_feat_idx)      # [max_n, F]
+        timestamps = self._get_all_team_timestamps(team_to_node, team_to_feat_idx)       # [max_n, T]
+        full_history = self._get_all_team_full_history(team_to_node, team_to_feat_idx)   # [max_n, T, F]
 
-        return node_features, adj, hist, timestamps, full_history, target
+        max_n = 2 ** self.depth
+        codes = torch.from_numpy(self._cat_codes[real_idx]).to(dtype=torch.long)
+        x_cat = codes.view(1, 1, -1).expand(max_n, 1, -1).contiguous()                  # [max_n, 1, n_cat]
+
+        return node_features, adj, hist, timestamps, full_history, x_cat, target
