@@ -5,7 +5,7 @@ def train_epoch(model, optimizer, train_loader, device, criterion):
     acc_log = []
     model.train()
 
-    for node_features, adj, hist, x_cat, target in tqdm(train_loader):
+    for node_features, adj, hist, timestamps, full_history, x_cat, target in tqdm(train_loader):
       node_features = node_features.to(device)
       adj = adj.to(device)
       hist = hist.to(device)

@@ -12,7 +12,7 @@ import yaml
 sys.path.insert(0, "src")
 from dataset.dataset import PandasDataset
 
-CSV   = "notebooks/time siries catboost/selected_leagues_one_line.csv"
+CSV   = "data/selected_leagues_one_line.csv"
 DEPTH = 8
 
 with open("src/config/base.yaml") as f:
@@ -43,6 +43,7 @@ def build_ds(csv_path: str, depth: int, with_categories: bool = False) -> Pandas
 
     ds = object.__new__(PandasDataset)
     ds.depth = depth
+    ds.t = depth
     ds.target_col = "match_result"
     ds.teams = df["team"].values
     ds.enemies = df["enemy_team"].values
@@ -62,6 +63,7 @@ def build_ds(csv_path: str, depth: int, with_categories: bool = False) -> Pandas
         ds.df = df.drop(columns=drop_cols).fillna(0)
 
     ds.feature_cols = [c for c in ds.df.columns if c != ds.target_col]
+    ds.dates = pd.to_datetime(df["date"]).map(lambda d: d.toordinal()).values.astype(np.float32)
     ds._raw_df = df
 
     ds.team_to_indices = {}
@@ -93,7 +95,7 @@ def run(ds: PandasDataset, idx: int):
     print(f"{'='*65}")
 
     t0 = time.time()
-    node_features, adj, hist, x_cat, target = ds[idx]
+    node_features, adj, hist, timestamps, full_history, x_cat, target = ds[idx]
     elapsed = time.time() - t0
 
     result_label = {0: "проиграл", 1: "ничья", 2: "победил"}
@@ -104,6 +106,8 @@ def run(ds: PandasDataset, idx: int):
     print(f"    node_features : {tuple(node_features.shape)}")
     print(f"    adj           : {tuple(adj.shape)}")
     print(f"    hist          : {tuple(hist.shape)}")
+    print(f"    timestamps    : {tuple(timestamps.shape)}")
+    print(f"    full_history  : {tuple(full_history.shape)}")
     print(f"    x_cat         : {tuple(x_cat.shape)}")
 
     # восстанавливаем team_to_node

@@ -47,6 +47,7 @@ class PandasDataset(Dataset):
         self.split_indices = list(df_full[split_mask].index)
 
         self.depth = args["data"]["depth"]
+        self.t = args["data"]["t"]
 
         # Полные массивы — BFS обращается к self.enemies[prev_idx] по индексу в df_full
         self.teams = df_full[team_col].values.copy()
@@ -91,6 +92,8 @@ class PandasDataset(Dataset):
         else:
             raise Exception("Unknown strategy for fill none")
 
+        self.dates = pd.to_datetime(df_full["date"]).map(lambda d: d.toordinal()).values.astype(np.float32)
+
         # Индексы строятся по всему df — история полностью доступна для val/test
         self.team_to_indices = {}
         for i in range(len(self.df)):
@@ -106,10 +109,10 @@ class PandasDataset(Dataset):
 
     def _get_team_features(self, team: str, up_to_idx: int) -> torch.Tensor:
         indices = self.team_to_indices.get(team, [])
-        selected = [i for i in indices if i <= up_to_idx][-self.depth:]
+        selected = [i for i in indices if i <= up_to_idx][-self.t:]
         rows = self.df.iloc[selected][self.feature_cols].values.astype(np.float32)
-        if len(rows) < self.depth:
-            pad = np.zeros((self.depth - len(rows), len(self.feature_cols)), dtype=np.float32)
+        if len(rows) < self.t:
+            pad = np.zeros((self.t - len(rows), len(self.feature_cols)), dtype=np.float32)
             rows = np.vstack([pad, rows])
         return torch.tensor(rows, dtype=torch.float32)
 
@@ -209,7 +212,46 @@ class PandasDataset(Dataset):
                 out[node] = rows[-1]
         return torch.tensor(out, dtype=torch.float32)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _get_all_team_timestamps(
+        self, team_to_node: dict, team_to_feat_idx: dict
+    ) -> torch.Tensor:
+        """Returns [max_n, T] — ordinal dates of last `t` matches per team.
+        If team has fewer than t matches, pads left by repeating the earliest date.
+        Teams with no matches at all get a zero row."""
+        max_n = 2 ** self.depth
+        out = np.zeros((max_n, self.t), dtype=np.float32)
+        for team, node in team_to_node.items():
+            if team not in team_to_feat_idx:
+                continue
+            feat_idx = team_to_feat_idx[team]
+            indices = self.team_to_indices.get(team, [])
+            selected = [i for i in indices if i <= feat_idx][-self.t:]
+            if not selected:
+                continue
+            dates = self.dates[selected]  # (n_actual,)
+            if len(dates) < self.t:
+                pad = np.full(self.t - len(dates), dates[0], dtype=np.float32)
+                dates = np.concatenate([pad, dates])
+            out[node] = dates
+        return torch.tensor(out, dtype=torch.float32)
+
+    def _get_all_team_full_history(
+        self, team_to_node: dict, team_to_feat_idx: dict
+    ) -> torch.Tensor:
+        """Returns [max_n, T, F] — full match history per team.
+        Teams with fewer than t matches are zero-padded on the left."""
+        max_n = 2 ** self.depth
+        n_features = len(self.feature_cols)
+        out = np.zeros((max_n, self.t, n_features), dtype=np.float32)
+        for team, node in team_to_node.items():
+            if team not in team_to_feat_idx:
+                continue
+            feat_idx = team_to_feat_idx[team]
+            rows = self._get_team_features(team, feat_idx).numpy()  # [T, F]
+            out[node] = rows
+        return torch.tensor(out, dtype=torch.float32)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, ...]:
         real_idx = self.split_indices[idx]
         t1 = self.teams[real_idx]
         t2 = self.enemies[real_idx]
@@ -220,10 +262,12 @@ class PandasDataset(Dataset):
         t2_idx = self.pair_to_indices[(t2, t1)][match_pos]
 
         adj, hist, team_to_node, team_to_feat_idx = self._get_graph_features(t1, real_idx, t2, t2_idx)
-        node_features = self._get_all_team_features(team_to_node, team_to_feat_idx)  # (max_n, F)
+        node_features = self._get_all_team_features(team_to_node, team_to_feat_idx)      # [max_n, F]
+        timestamps = self._get_all_team_timestamps(team_to_node, team_to_feat_idx)       # [max_n, T]
+        full_history = self._get_all_team_full_history(team_to_node, team_to_feat_idx)   # [max_n, T, F]
 
         max_n = 2 ** self.depth
         codes = torch.from_numpy(self._cat_codes[real_idx]).to(dtype=torch.long)
-        x_cat = codes.view(1, 1, -1).expand(max_n, 1, -1).contiguous()
+        x_cat = codes.view(1, 1, -1).expand(max_n, 1, -1).contiguous()                  # [max_n, 1, n_cat]
 
-        return node_features, adj, hist, x_cat, target
+        return node_features, adj, hist, timestamps, full_history, x_cat, target
