@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 
 
 class PandasDataset(Dataset):
-    def __init__(self, args, kfold_step, kfold_steps, train):
+    def __init__(self, args, kfold_step, kfold_steps, train, cat_encoder=None):
         dataset_name = args["name"]
         none_fill = args["none_fill"]
 
@@ -54,9 +54,34 @@ class PandasDataset(Dataset):
 
         self.df = df_full.drop(columns=args["data"]["igonre_columns"])
 
-        # TODO нормально сделать кат фичи
-        self.cat_columns = args["data"]["cat_columns"]
-        self.df = self.df.drop(columns=self.cat_columns)  # пока просто удаляем но это плохо!
+        self.cat_columns = list(args["data"].get("cat_columns") or [])
+        if self.cat_columns:
+            missing = [c for c in self.cat_columns if c not in self.df.columns]
+            if missing:
+                raise ValueError(f"cat_columns отсутствуют в CSV: {missing}")
+            if cat_encoder is None:
+                self.cat_encoder = {}
+                for col in self.cat_columns:
+                    vals = pd.unique(self.df[col].dropna())
+                    self.cat_encoder[col] = {v: i + 1 for i, v in enumerate(vals)}
+            elif isinstance(cat_encoder, dict):
+                self.cat_encoder = cat_encoder
+            else:
+                raise TypeError("cat_encoder: None (построить по сплиту) или dict с train.")
+            self.cat_cardinalities = [
+                max(self.cat_encoder[col].values(), default=0) + 1
+                for col in self.cat_columns
+            ]
+            code_mat = np.zeros((len(self.df), len(self.cat_columns)), dtype=np.int64)
+            for j, col in enumerate(self.cat_columns):
+                mapped = self.df[col].map(self.cat_encoder[col])
+                code_mat[:, j] = mapped.fillna(0).astype(np.int64).to_numpy()
+            self._cat_codes = code_mat
+            self.df = self.df.drop(columns=self.cat_columns)
+        else:
+            self.cat_encoder = {}
+            self.cat_cardinalities = []
+            self._cat_codes = np.zeros((len(self.df), 0), dtype=np.int64)
 
         self.target_col = args["data"]["target_column"]
         self.feature_cols = [col for col in self.df.columns if col != self.target_col]
@@ -184,7 +209,7 @@ class PandasDataset(Dataset):
                 out[node] = rows[-1]
         return torch.tensor(out, dtype=torch.float32)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         real_idx = self.split_indices[idx]
         t1 = self.teams[real_idx]
         t2 = self.enemies[real_idx]
@@ -197,4 +222,8 @@ class PandasDataset(Dataset):
         adj, hist, team_to_node, team_to_feat_idx = self._get_graph_features(t1, real_idx, t2, t2_idx)
         node_features = self._get_all_team_features(team_to_node, team_to_feat_idx)  # (max_n, F)
 
-        return node_features, adj, hist, target
+        max_n = 2 ** self.depth
+        codes = torch.from_numpy(self._cat_codes[real_idx]).to(dtype=torch.long)
+        x_cat = codes.view(1, 1, -1).expand(max_n, 1, -1).contiguous()
+
+        return node_features, adj, hist, x_cat, target
