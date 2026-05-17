@@ -39,27 +39,29 @@ class InvertedDataEmbedding(nn.Module):
         self.activation = nn.GELU()
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x: torch.Tensor, x_cat: torch.Tensor) -> torch.Tensor:
-        if x.dim() == 3:
-            if self.mode == "ts":
-                if self.feat_dim != 1:
-                    raise ValueError(
-                        f"Вход [B, N, T] только при feat_dim=1; "
-                        f"сейчас feat_dim={self.feat_dim}, передай [B, N, T, {self.feat_dim}]."
-                    )
-                x = x.unsqueeze(-1)
-            if self.mode == "stats":
-                if self.t != 1:
-                    raise ValueError(
-                        f"Вход [B, N, F] только при t=1; "
-                        f"сейчас t={self.t}, передай [B, N, T, {self.feat_dim}]."
-                    )
-                x = x.unsqueeze(-2)
-
-        if self.mode == "ts_full" and x.dim() != 4:
-            raise ValueError(
-                f"Ожидается [B, N, T, F], получили {tuple(x.shape)}"
-            )
+    def forward(self, x: torch.Tensor, x_cat: torch.Tensor, full_history: torch.Tensor) -> torch.Tensor:
+        if self.mode == "ts_full":
+            if full_history.dim() != 4:
+                raise ValueError(
+                    f"Ожидается [B, N, T, F], получили {tuple(full_history.shape)}"
+                )
+            x = full_history
+        else:
+            if x.dim() == 3:
+                if self.mode == "ts":
+                    if self.feat_dim != 1:
+                        raise ValueError(
+                            f"Вход [B, N, T] только при feat_dim=1; "
+                            f"сейчас feat_dim={self.feat_dim}, передай [B, N, T, {self.feat_dim}]."
+                        )
+                    x = x.unsqueeze(-1)
+                if self.mode == "stats":
+                    if self.t != 1:
+                        raise ValueError(
+                            f"Вход [B, N, F] только при t=1; "
+                            f"сейчас t={self.t}, передай [B, N, T, {self.feat_dim}]."
+                        )
+                    x = x.unsqueeze(-2)
 
         B, N, _, _ = x.shape
 

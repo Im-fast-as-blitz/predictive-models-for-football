@@ -11,10 +11,13 @@ def test(model, loader, device, criterion):
         adj = adj.to(device)
         hist = hist.to(device)
         x_cat = x_cat.to(device)
+        timestamps = timestamps.to(device)
+        full_history = full_history.to(device)
+
         target = target.to(device)
 
         with torch.no_grad():
-            out = model(node_features, x_cat)
+            out = model(node_features, adj, hist, timestamps, full_history, x_cat)
             loss = criterion(out, target)
 
             pred = out.argmax(dim=1)

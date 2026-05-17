@@ -22,7 +22,7 @@ def train():
 
     for i in range(kfold_steps):
         logger = get_logger(args["logger"])
-        
+
         train_dataset = PandasDataset(
             args=args["dataset"],
             kfold_step=i + 1,
@@ -57,6 +57,8 @@ def train():
         optimizer = get_optimizer(args["optimizer"], model)
 
         if "scheduler" in args.keys():
+            total_iters = len(train_dataloader) * n_epochs
+            args["scheduler"]["total_iters"] = total_iters
             scheduler = get_scheduler(args["scheduler"], optimizer)
         else:
             scheduler = None
@@ -72,9 +74,7 @@ def train():
         print(f"Fold number {i + 1}\n")
 
         for epoch in range(n_epochs):
-            logger.set_step(epoch, mode="train")
-
-            train_loss, train_acc = train_epoch(model, optimizer, train_dataloader, device, criterion)
+            train_loss, train_acc = train_epoch(model, optimizer, train_dataloader, device, criterion, scheduler, logger, epoch)
             val_loss, val_acc = test(model, val_dataloader, device, criterion)
 
             train_loss_log.extend(train_loss)
@@ -84,19 +84,13 @@ def train():
             val_acc_log.append(val_acc)
 
             logger.add_scalars({
-                "train_loss": np.mean(train_loss),
-                "train_accuracy": np.mean(train_acc),
                 "val_loss": val_loss,
-                "val_accuracy": val_acc,
-                "lr": optimizer.param_groups[0]["lr"]
+                "val_accuracy": val_acc
             })
 
             print(f"Epoch {epoch}")
             print(f" train loss: {np.mean(train_loss)}, train acc: {np.mean(train_acc)}")
             print(f" val loss: {val_loss}, val acc: {val_acc}\n")
-
-            if scheduler is not None:
-                scheduler.step()
 
         test_loss, test_acc = test(model, test_dataloader, device, criterion)
         print("- " * 25)

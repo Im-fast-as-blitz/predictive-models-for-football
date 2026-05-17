@@ -1,17 +1,18 @@
 model:
   hidden_size: 512
-  dropout: 0.1
+  dropout: 0.01
   embedder:
-    t: 1
-    mode: stats
+    t: 100
+    mode: ts_full
     cat_emb_dim: 8
   layer:
     attention:
+      depth: 4
       n_heads: 8
     ffn:
       d_ff: 2048
   L: 8
-  pooler: one_token
+  pooler: avg
   out_features: 3
 dataset:
   name: selected_leagues_one_line
@@ -20,8 +21,8 @@ dataset:
     target_column: match_result
     season_column: season
     val_season: 2024-2025
-    depth: 1
-    t: 1
+    depth: ${model.layer.attention.depth}
+    t: ${model.embedder.t}
     cat_columns:
       - league_code
     igonre_columns:
@@ -53,13 +54,12 @@ train:
   n_epochs: 10
 optimizer:
   _target_: torch.optim.Adam
-  lr: 3e-4
+  lr: 1e-2
   weight_decay: 1e-4
 scheduler:
   _target_: torch.optim.lr_scheduler.LinearLR
   start_factor: 1.0
   end_factor: 0.01
-  total_iters: ${train.n_epochs}
 criterion:
   _target_: torch.nn.CrossEntropyLoss
 logger:

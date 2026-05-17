@@ -21,8 +21,8 @@ class Layer(nn.Module):
 
         self.ln2 = TemporalLayerNorm(hidden_size)
 
-    def forward(self, x):
-        x = self.attention(x) + x
+    def forward(self, x, adj, hist):
+        x = self.attention(x, adj, hist) + x
         x = self.ln1(x)
         x = self.ffn(x) + x
         x = self.ln2(x)

@@ -138,7 +138,8 @@ class PandasDataset(Dataset):
         team_to_feat_idx: dict[str, int] = {t1: idx, t2: t2_idx}
         node_count = 2
 
-        adj = np.zeros((max_n, max_n), dtype=np.float32)
+        adj = np.zeros((max_n, max_n), dtype=np.float32) + np.eye(max_n, dtype=np.float32)
+        adj[0][1], adj[1][0] = 1, 1
         hist = np.zeros((num_levels, max_n, max_n), dtype=np.float32)
 
         if num_levels == 0:
@@ -192,7 +193,7 @@ class PandasDataset(Dataset):
 
         return (
             torch.tensor(adj, dtype=torch.float32),
-            torch.tensor(hist, dtype=torch.float32),
+            torch.tensor(hist, dtype=torch.long),
             team_to_node,
             team_to_feat_idx,
         )
