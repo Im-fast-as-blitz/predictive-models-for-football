@@ -63,7 +63,16 @@ class InvertedDataEmbedding(nn.Module):
                         )
                     x = x.unsqueeze(-2)
 
-        B, N, _, _ = x.shape
+        B, N, T, _ = x.shape
+
+        if self.cat_embeddings and x_cat.shape[2] != T:
+            if self.mode == "stats" and x_cat.shape[2] > 1:
+                x_cat = x_cat[:, :, -1:, :]
+            else:
+                raise ValueError(
+                    f"x_cat T={x_cat.shape[2]} не совпадает с x T={T}; "
+                    f"ожидается [B, N, T, C] с тем же T, что у full_history."
+                )
 
         cat_parts = [emb(x_cat[..., i]) for i, emb in enumerate(self.cat_embeddings)]
         cat_embedded = torch.cat(cat_parts, dim=-1)
