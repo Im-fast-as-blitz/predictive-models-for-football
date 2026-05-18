@@ -47,7 +47,7 @@ def _build_cat_state(ds: PandasDataset, df: pd.DataFrame) -> None:
     ds._cat_codes = code_mat
 
 
-def make_mock_dataset(depth: int, with_categories: bool = False) -> PandasDataset:
+def make_mock_dataset(depth: int, with_categories: bool = False, t: int = 1) -> PandasDataset:
     rows = [
         {"team": "A", "enemy_team": "C", "match_result": 2, "feat_a": 1.0,  "feat_b": 2.0, "league_code": "E1"},
         {"team": "C", "enemy_team": "A", "match_result": 0, "feat_a": 3.0,  "feat_b": 4.0, "league_code": "E1"},
@@ -60,6 +60,9 @@ def make_mock_dataset(depth: int, with_categories: bool = False) -> PandasDatase
 
     ds = object.__new__(PandasDataset)
     ds.depth = depth
+    ds.t = t
+    ds.split_indices = list(range(len(df)))
+    ds.dates = np.arange(len(df), dtype=np.float32)
     ds.target_col = "match_result"
     ds.teams = df["team"].values
     ds.enemies = df["enemy_team"].values
@@ -103,17 +106,19 @@ def check(name: bool, condition: bool, detail: str = ""):
 def test_depth3():
     print("\n=== depth=3, idx=4 (A vs B) ===")
     ds = make_mock_dataset(depth=3)
-    node_features, adj, hist, x_cat, target = ds[4]
+    node_features, adj, hist, _, full_history, x_cat, target = ds[4]
 
     max_n = 2 ** 3  # 8
     F = 2
+    T = 1
 
     # формы
     check("node_features shape", node_features.shape == (max_n, F),
           str(tuple(node_features.shape)))
     check("adj shape",           adj.shape == (max_n, max_n))
     check("hist shape",          hist.shape == (2, max_n, max_n))
-    check("x_cat shape", x_cat.shape == (max_n, 1, 0), str(tuple(x_cat.shape)))
+    check("full_history shape", full_history.shape == (max_n, T, F))
+    check("x_cat shape", x_cat.shape == (max_n, T, 0), str(tuple(x_cat.shape)))
     check("target value",        target.item() == 1)
     check("adj symmetric", torch.allclose(adj, adj.T))
 
@@ -152,7 +157,7 @@ def test_depth3():
 def test_depth2():
     print("\n=== depth=2, idx=4 (A vs B) ===")
     ds = make_mock_dataset(depth=2)
-    node_features, adj, hist, x_cat, target = ds[4]
+    node_features, adj, hist, _, full_history, x_cat, target = ds[4]
 
     max_n = 2 ** 2  # 4
     check("node_features shape", node_features.shape == (max_n, 2))
@@ -172,7 +177,7 @@ def test_depth2():
 def test_depth1():
     print("\n=== depth=1, idx=4 (A vs B) ===")
     ds = make_mock_dataset(depth=1)
-    node_features, adj, hist, x_cat, target = ds[4]
+    node_features, adj, hist, _, full_history, x_cat, target = ds[4]
 
     max_n = 2 ** 1  # 2
     check("node_features shape", node_features.shape == (max_n, 2))
@@ -188,26 +193,43 @@ def test_depth1():
 # ─────────────────────────────────────────────
 def test_categorical():
     print("\n=== categorical, depth=1, idx=4 (A vs B, league E1) ===")
-    ds = make_mock_dataset(depth=1, with_categories=True)
+    ds = make_mock_dataset(depth=1, with_categories=True, t=1)
 
     check("cat_encoder E1", ds.cat_encoder["league_code"]["E1"] == 1)
     check("cat_encoder E2", ds.cat_encoder["league_code"]["E2"] == 2)
     check("cat_cardinalities", ds.cat_cardinalities == [3])  # 0 + E1 + E2
     check("_cat_codes row 4", ds._cat_codes[4, 0] == 1)
 
-    node_features, adj, hist, x_cat, target = ds[4]
+    node_features, adj, hist, _, full_history, x_cat, target = ds[4]
     max_n = 2
 
     check("x_cat shape", x_cat.shape == (max_n, 1, 1), str(tuple(x_cat.shape)))
     check("x_cat dtype", x_cat.dtype == torch.long)
-    check("x_cat all nodes same league", (x_cat == 1).all().item())
+    check("x_cat node0 last step E1", x_cat[0, 0, 0].item() == 1)
+    check("x_cat node1 last step E1", x_cat[1, 0, 0].item() == 1)
     check("league_code not in df", "league_code" not in ds.df.columns)
     check("node_features unchanged", node_features[0, 0].item() == 9.0)
 
 
+def test_categorical_aligned_with_history():
+    print("\n=== categorical T aligned with full_history ===")
+    ds = make_mock_dataset(depth=1, with_categories=True, t=2)
+    _, _, _, _, full_history, x_cat, _ = ds[4]
+    max_n = 2
+    check("same T", full_history.shape[1] == x_cat.shape[1] == 2)
+    check("full_history shape", full_history.shape == (max_n, 2, 2))
+    check("x_cat shape", x_cat.shape == (max_n, 2, 1))
+    # A: матчи idx 0 (E1) и 4 (E1)
+    check("A step0 league E1", x_cat[0, 0, 0].item() == 1)
+    check("A step1 league E1", x_cat[0, 1, 0].item() == 1)
+    # B: idx 2 (E2) и 5 (E1)
+    check("B step0 league E2", x_cat[1, 0, 0].item() == 2)
+    check("B step1 league E1", x_cat[1, 1, 0].item() == 1)
+
+
 def test_categorical_reuse_encoder():
     print("\n=== categorical reuse train encoder ===")
-    train_ds = make_mock_dataset(depth=1, with_categories=True)
+    train_ds = make_mock_dataset(depth=1, with_categories=True, t=1)
     encoder = train_ds.cat_encoder
 
     mapped = pd.Series(["E9"]).map(encoder["league_code"]).fillna(0).astype(np.int64).to_numpy()
@@ -219,5 +241,6 @@ if __name__ == "__main__":
     test_depth2()
     test_depth1()
     test_categorical()
+    test_categorical_aligned_with_history()
     test_categorical_reuse_encoder()
     print("\n=== ALL TESTS PASSED ===")

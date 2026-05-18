@@ -72,7 +72,7 @@ if __name__ == "__main__":
     print(f"  hist          : [{BATCH_SIZE}, {DEPTH-1}, {max_n}, {max_n}]")
     print(f"  timestamps    : [{BATCH_SIZE}, {max_n}, {DEPTH}]")
     print(f"  full_history  : [{BATCH_SIZE}, {max_n}, {DEPTH}, {n_feats}]")
-    print(f"  x_cat         : [{BATCH_SIZE}, {max_n}, 1, 0]  (без категориальных колонок)")
+    print(f"  x_cat         : [{BATCH_SIZE}, {max_n}, {DEPTH}, 0]  (без категориальных колонок)")
     print(f"  target        : [{BATCH_SIZE}]")
 
     loader = DataLoader(ds, batch_size=BATCH_SIZE, shuffle=False)

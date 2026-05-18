@@ -107,14 +107,28 @@ class PandasDataset(Dataset):
     def __len__(self) -> int:
         return len(self.split_indices)
 
-    def _get_team_features(self, team: str, up_to_idx: int) -> torch.Tensor:
+    def _selected_team_indices(self, team: str, up_to_idx: int) -> list[int]:
         indices = self.team_to_indices.get(team, [])
-        selected = [i for i in indices if i <= up_to_idx][-self.t:]
+        return [i for i in indices if i <= up_to_idx][-self.t:]
+
+    def _get_team_features(self, team: str, up_to_idx: int) -> torch.Tensor:
+        selected = self._selected_team_indices(team, up_to_idx)
         rows = self.df.iloc[selected][self.feature_cols].values.astype(np.float32)
         if len(rows) < self.t:
             pad = np.zeros((self.t - len(rows), len(self.feature_cols)), dtype=np.float32)
             rows = np.vstack([pad, rows])
         return torch.tensor(rows, dtype=torch.float32)
+
+    def _get_team_cat_codes(self, team: str, up_to_idx: int) -> np.ndarray:
+        n_cat = self._cat_codes.shape[1]
+        selected = self._selected_team_indices(team, up_to_idx)
+        if not selected:
+            return np.zeros((self.t, n_cat), dtype=np.int64)
+        rows = self._cat_codes[selected]
+        if len(rows) < self.t:
+            pad = np.zeros((self.t - len(rows), n_cat), dtype=np.int64)
+            rows = np.vstack([pad, rows])
+        return rows
 
     def _get_graph_features(
         self, t1: str, idx: int, t2: str, t2_idx: int
@@ -225,8 +239,7 @@ class PandasDataset(Dataset):
             if team not in team_to_feat_idx:
                 continue
             feat_idx = team_to_feat_idx[team]
-            indices = self.team_to_indices.get(team, [])
-            selected = [i for i in indices if i <= feat_idx][-self.t:]
+            selected = self._selected_team_indices(team, feat_idx)
             if not selected:
                 continue
             dates = self.dates[selected]  # (n_actual,)
@@ -252,6 +265,19 @@ class PandasDataset(Dataset):
             out[node] = rows
         return torch.tensor(out, dtype=torch.float32)
 
+    def _get_all_team_cat_history(
+        self, team_to_node: dict, team_to_feat_idx: dict
+    ) -> torch.Tensor:
+        max_n = 2 ** self.depth
+        n_cat = self._cat_codes.shape[1]
+        out = np.zeros((max_n, self.t, n_cat), dtype=np.int64)
+        for team, node in team_to_node.items():
+            if team not in team_to_feat_idx:
+                continue
+            feat_idx = team_to_feat_idx[team]
+            out[node] = self._get_team_cat_codes(team, feat_idx)
+        return torch.tensor(out, dtype=torch.long)
+
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, ...]:
         real_idx = self.split_indices[idx]
         t1 = self.teams[real_idx]
@@ -266,9 +292,6 @@ class PandasDataset(Dataset):
         node_features = self._get_all_team_features(team_to_node, team_to_feat_idx)      # [max_n, F]
         timestamps = self._get_all_team_timestamps(team_to_node, team_to_feat_idx)       # [max_n, T]
         full_history = self._get_all_team_full_history(team_to_node, team_to_feat_idx)   # [max_n, T, F]
-
-        max_n = 2 ** self.depth
-        codes = torch.from_numpy(self._cat_codes[real_idx]).to(dtype=torch.long)
-        x_cat = codes.view(1, 1, -1).expand(max_n, 1, -1).contiguous()                  # [max_n, 1, n_cat]
+        x_cat = self._get_all_team_cat_history(team_to_node, team_to_feat_idx)           # [max_n, T, C]
 
         return node_features, adj, hist, timestamps, full_history, x_cat, target
