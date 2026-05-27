@@ -40,7 +40,7 @@ class InvertedDataEmbedding(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x: torch.Tensor, x_cat: torch.Tensor, full_history: torch.Tensor) -> torch.Tensor:
-        if self.mode == "ts_full":
+        if self.mode == "ts_full" or self.mode == "ts":
             if full_history.dim() != 4:
                 raise ValueError(
                     f"Ожидается [B, N, T, F], получили {tuple(full_history.shape)}"
@@ -48,13 +48,6 @@ class InvertedDataEmbedding(nn.Module):
             x = full_history
         else:
             if x.dim() == 3:
-                if self.mode == "ts":
-                    if self.feat_dim != 1:
-                        raise ValueError(
-                            f"Вход [B, N, T] только при feat_dim=1; "
-                            f"сейчас feat_dim={self.feat_dim}, передай [B, N, T, {self.feat_dim}]."
-                        )
-                    x = x.unsqueeze(-1)
                 if self.mode == "stats":
                     if self.t != 1:
                         raise ValueError(
@@ -75,8 +68,9 @@ class InvertedDataEmbedding(nn.Module):
                 )
 
         cat_parts = [emb(x_cat[..., i]) for i, emb in enumerate(self.cat_embeddings)]
-        cat_embedded = torch.cat(cat_parts, dim=-1)
-        x = torch.cat([x, cat_embedded], dim=-1)
+        if cat_parts:
+            cat_embedded = torch.cat(cat_parts, dim=-1)
+            x = torch.cat([x, cat_embedded], dim=-1)
 
         x = x.reshape(B, N, -1)
         x = self.value_embedding(x)

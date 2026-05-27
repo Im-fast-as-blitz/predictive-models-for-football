@@ -25,6 +25,8 @@ dataset:
     t: ${model.embedder.t}
     cat_columns:
       - league_code
+      - referee
+      - team
     ignore_columns_prefix: enemy_
     igonre_columns:
       - ftg
@@ -46,8 +48,6 @@ dataset:
       - ht_l
       - date
       - season
-      - referee
-      - team
       - enemy_team
 train:
   kfold_steps: 1

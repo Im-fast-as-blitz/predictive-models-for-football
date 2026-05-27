@@ -13,6 +13,7 @@ class PandasDataset(Dataset):
         season_col = args["data"]["season_column"]
         team_col = args["data"].get("team_column", "team")
         enemy_col = args["data"].get("enemy_column", "enemy_team")
+        self.target_col = args["data"]["target_column"]
 
         df_full = pd.read_csv(f"data/{dataset_name}.csv")
         df_full = df_full[df_full[season_col] <= args["data"]["val_season"]].reset_index(drop=True)
@@ -47,7 +48,8 @@ class PandasDataset(Dataset):
         self.split_indices = list(df_full[split_mask].index)
 
         self.depth = args["data"]["depth"]
-        self.t = args["data"]["t"]
+        self.ts = args["data"].get("ts", False)
+        self.t = args["data"]["t"] + int(self.ts)   # add one more day for ts to stop leak tgt
 
         # Полные массивы — BFS обращается к self.enemies[prev_idx] по индексу в df_full
         self.teams = df_full[team_col].values.copy()
@@ -71,7 +73,14 @@ class PandasDataset(Dataset):
 
             self.df = df_full.drop(columns=columns_to_drop)
         elif "save_columns" in args["data"]:
-            pass
+            columns_to_drop = df_full.columns
+            save_columns  = args["data"]["save_columns"]
+
+            columns_to_drop =  [x for x in columns_to_drop if x not in save_columns]
+            columns_to_drop =  [x for x in columns_to_drop if x not in self.cat_columns]
+            columns_to_drop =  [x for x in columns_to_drop if x != self.target_col]
+
+            self.df = df_full.drop(columns=columns_to_drop)
 
         if self.cat_columns:
             missing = [c for c in self.cat_columns if c not in self.df.columns]
@@ -101,8 +110,10 @@ class PandasDataset(Dataset):
             self.cat_cardinalities = []
             self._cat_codes = np.zeros((len(self.df), 0), dtype=np.int64)
 
-        self.target_col = args["data"]["target_column"]
-        self.feature_cols = [col for col in self.df.columns if col != self.target_col]
+        if not self.ts:
+            self.feature_cols = [col for col in self.df.columns if col != self.target_col]
+        else:
+            self.feature_cols = self.df.columns
 
         if none_fill == "zero":
             self.df[self.feature_cols] = self.df[self.feature_cols].fillna(0)
@@ -310,5 +321,9 @@ class PandasDataset(Dataset):
         timestamps = self._get_all_team_timestamps(team_to_node, team_to_feat_idx)       # [max_n, T]
         full_history = self._get_all_team_full_history(team_to_node, team_to_feat_idx)   # [max_n, T, F]
         x_cat = self._get_all_team_cat_history(team_to_node, team_to_feat_idx)           # [max_n, T, C]
+
+        if self.ts:
+            x_cat = x_cat[:, :-1, :]
+            full_history = full_history[:, :-1, :]
 
         return node_features, adj, hist, timestamps, full_history, x_cat, target

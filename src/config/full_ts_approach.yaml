@@ -23,32 +23,22 @@ dataset:
     val_season: 2024-2025
     depth: ${model.layer.attention.depth}
     t: ${model.embedder.t}
+    ts: True
     cat_columns:
       - league_code
       - referee
       - team
-    ignore_columns_prefix: enemy_
-    igonre_columns:
+    save_columns:
       - ftg
-      - enemy_ftg
       - s
       - st
       - f
       - c
       - y
       - r
-      - enemy_s
-      - enemy_st
-      - enemy_f
-      - enemy_c
-      - enemy_y
-      - enemy_r
       - ht_w
       - ht_d
       - ht_l
-      - date
-      - season
-      - enemy_team
 train:
   kfold_steps: 1
   batch_size: 32
