@@ -25,6 +25,7 @@ dataset:
     t: ${model.embedder.t}
     cat_columns:
       - league_code
+    ignore_columns_prefix: enemy_
     igonre_columns:
       - ftg
       - enemy_ftg

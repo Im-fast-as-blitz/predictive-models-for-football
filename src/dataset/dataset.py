@@ -53,9 +53,26 @@ class PandasDataset(Dataset):
         self.teams = df_full[team_col].values.copy()
         self.enemies = df_full[enemy_col].values.copy()
 
-        self.df = df_full.drop(columns=args["data"]["igonre_columns"])
-
         self.cat_columns = list(args["data"].get("cat_columns") or [])
+
+        # удаляем все ненужные колонки
+        if "igonre_columns" in args["data"] and "save_columns" in args["data"]:
+            raise Exception("Choose only one mode: igonre_columns or save_columns")
+        elif "igonre_columns" in args["data"]:
+            columns_to_drop = args["data"]["igonre_columns"]
+
+            if "ignore_columns_prefix" in args["data"]:
+                ignore_columns_prefix = args["data"]["ignore_columns_prefix"]
+                for col in df_full.columns:
+                    if col[:len(ignore_columns_prefix)] == ignore_columns_prefix:
+                        columns_to_drop.append(col)
+
+            columns_to_drop =  [x for x in columns_to_drop if x not in self.cat_columns]
+
+            self.df = df_full.drop(columns=columns_to_drop)
+        elif "save_columns" in args["data"]:
+            pass
+
         if self.cat_columns:
             missing = [c for c in self.cat_columns if c not in self.df.columns]
             if missing:
