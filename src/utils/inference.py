@@ -17,7 +17,7 @@ def test(model, loader, device, criterion):
         target = target.to(device)
 
         with torch.no_grad():
-            out = model(node_features, adj, hist, timestamps, full_history, x_cat)
+            out = model(node_features, adj, hist, full_history, x_cat)
             loss = criterion(out, target)
 
             pred = out.argmax(dim=1)
