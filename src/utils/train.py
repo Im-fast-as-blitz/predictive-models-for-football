@@ -1,4 +1,5 @@
 from tqdm import tqdm
+import torch
 
 def train_epoch(model, optimizer, train_loader, device, criterion, scheduler, logger, epoch):
     loss_log = []
@@ -22,6 +23,7 @@ def train_epoch(model, optimizer, train_loader, device, criterion, scheduler, lo
 
       loss = criterion(out, target)
       loss.backward()
+      torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
       optimizer.step()
 
       pred = out.argmax(dim=1)

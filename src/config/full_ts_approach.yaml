@@ -12,7 +12,7 @@ model:
     ffn:
       d_ff: 2048
   L: 8
-  pooler: avg
+  pooler: one_token
   out_features: 3
 dataset:
   name: selected_leagues_one_line

@@ -59,7 +59,7 @@ class MultiHeadAttention(nn.Module):
 
         R = R + pe
 
-        R = R.sum(dim=1)
+        R = R.mean(dim=1)
         R = self.history_proj(R)                       # (B, N, N, D)
 
         R = self.W_r(R).view(B, N, N, self.n_heads, self.d_k)
