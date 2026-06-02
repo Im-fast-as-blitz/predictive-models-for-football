@@ -8,13 +8,19 @@ from torch.utils.data import DataLoader
 from src.dataset import PandasDataset
 from src.utils import parse_args, get_optimizer, get_scheduler, get_criterion, get_logger
 from src.model import ITransformer
-from src.utils import train_epoch, test
+from src.utils import train_epoch, test, CheckpointManager
 
 def train():
     args = parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("Device:", device)
+
+    checkpoint_manager = CheckpointManager(
+        save_dir='saved',
+        save_best_only=False,
+        mode='max'
+    )
     
     kfold_steps = args["train"]["kfold_steps"]
     batch_size = args["train"]["batch_size"]
@@ -90,6 +96,14 @@ def train():
             print(f"Epoch {epoch}")
             print(f" train loss: {np.mean(train_loss)}, train acc: {np.mean(train_acc)}")
             print(f" val loss: {val_loss}, val acc: {val_acc}\n")
+
+            checkpoint_manager.save(
+                epoch,
+                model,
+                optimizer,
+                metric=val_acc,
+                scheduler=scheduler
+            )
 
         test_loss, test_acc = test(model, test_dataloader, device, criterion)
         print("- " * 25)
