@@ -9,15 +9,12 @@ class CheckpointManager:
         self.best_metric = float('inf') if mode == 'min' else float('-inf')
         os.makedirs(save_dir, exist_ok=True)
 
-    def save(self, epoch, model, optimizer, metric, scheduler=None):
+    def save(self, epoch, model, metric):
         checkpoint = {
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
             'metric': metric,
         }
-        if scheduler:
-            checkpoint['scheduler_state_dict'] = scheduler.state_dict()
 
         if not self.save_best_only:
             path = os.path.join(self.save_dir, f'checkpoint_epoch_{epoch:03d}.pth')

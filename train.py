@@ -100,9 +100,7 @@ def train():
             checkpoint_manager.save(
                 epoch,
                 model,
-                optimizer,
-                metric=val_acc,
-                scheduler=scheduler
+                metric=val_acc
             )
 
         test_loss, test_acc = test(model, test_dataloader, device, criterion)
