@@ -6,12 +6,11 @@ def test(model, loader, device, criterion):
     acc_log = []
     model.eval()
 
-    for node_features, adj, hist, timestamps, full_history, x_cat, target in loader:
+    for node_features, adj, hist, _, full_history, x_cat, target in loader:
         node_features = node_features.to(device)
         adj = adj.to(device)
         hist = hist.to(device)
         x_cat = x_cat.to(device)
-        timestamps = timestamps.to(device)
         full_history = full_history.to(device)
 
         target = target.to(device)

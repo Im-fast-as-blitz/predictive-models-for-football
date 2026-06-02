@@ -20,26 +20,35 @@ class PandasDataset(Dataset):
 
         val_df = df_full[df_full[season_col] == args["data"]["val_season"]]
         fold_size = val_df.shape[0] // kfold_steps
+        val_size = min(200, fold_size)
         train_date_thr = ""
+        val_date_thr = ""
         for date in sorted(val_df["date"].unique()):
             if train_date_thr != "" and val_df[val_df["date"] <= date].shape[0] > fold_size * kfold_step:
                 break
             train_date_thr = date
 
+        for date in sorted(val_df["date"].unique()):
+            if val_date_thr != "" and val_df[(val_df["date"] <= date) & (val_df["date"] > train_date_thr)].shape[0] > val_size:
+                break
+            val_date_thr = date
+
+        assert train_date_thr < val_date_thr
+
         if train == "train":
             split_mask = ~(
                 (df_full[season_col] == args["data"]["val_season"])
-                & (df_full["date"] >= train_date_thr)
+                & (df_full["date"] > train_date_thr)
             )
         elif train == "val":
             split_mask = (
                 (df_full[season_col] == args["data"]["val_season"])
-                & (df_full["date"] == train_date_thr)
+                & (df_full["date"] < val_date_thr) & (df_full["date"] > train_date_thr)
             )
         elif train == "test":
             split_mask = (
                 (df_full[season_col] == args["data"]["val_season"])
-                & (df_full["date"] > train_date_thr)
+                & (df_full["date"] >= val_date_thr)
             )
         else:
             raise Exception("Unknown Split data strategy")

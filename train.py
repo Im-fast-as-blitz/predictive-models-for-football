@@ -25,22 +25,22 @@ def train():
 
         train_dataset = PandasDataset(
             args=args["dataset"],
-            kfold_step=i + 1,
-            kfold_steps=kfold_steps,
+            kfold_step=i+1,
+            kfold_steps=kfold_steps + 2,
             train="train",
             cat_encoder=None,
         )
         val_dataset = PandasDataset(
             args=args["dataset"],
             kfold_step=i+1,
-            kfold_steps=kfold_steps,
+            kfold_steps=kfold_steps + 2,
             train="val",
             cat_encoder=train_dataset.cat_encoder,
         )
         test_dataset = PandasDataset(
             args=args["dataset"],
             kfold_step=i+1,
-            kfold_steps=kfold_steps,
+            kfold_steps=kfold_steps + 2,
             train="test",
             cat_encoder=train_dataset.cat_encoder,
         )
@@ -48,7 +48,6 @@ def train():
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
         model = ITransformer(
             args["model"],
             len(train_dataset.feature_cols),
