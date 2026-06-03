@@ -1,6 +1,6 @@
 model:
   hidden_size: 512
-  dropout: 0.01
+  dropout: 0.1
   embedder:
     t: 1
     mode: stats
@@ -50,13 +50,13 @@ dataset:
       - season
       - enemy_team
 train:
-  kfold_steps: 1
-  batch_size: 32
+  kfold_steps: 5
+  batch_size: 256
   n_epochs: 10
 optimizer:
   _target_: torch.optim.Adam
-  lr: 1e-2
-  weight_decay: 1e-4
+  lr: 3e-3
+  weight_decay: 1e-3
 scheduler:
   _target_: torch.optim.lr_scheduler.LinearLR
   start_factor: 1.0
@@ -66,6 +66,9 @@ criterion:
 logger:
   project_name: "socer_project"
   entity: null
-  run_name: "test_run"
+  group: "stats_hpo_nik"
+  job_type: "hpo"
+  tags: ["stats", "hpo"]
+  run_name: "stats_reg_combo_5_fold"
   mode: "online"
   loss_names: ["loss"]

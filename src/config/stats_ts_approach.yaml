@@ -1,17 +1,17 @@
 model:
   hidden_size: 512
-  dropout: 0.01
+  dropout: 0.1
   embedder:
     t: 100
     mode: ts_full
-    cat_emb_dim: 8
+    cat_emb_dim: 4
   layer:
     attention:
-      depth: 4
-      n_heads: 8
+      depth: 2
+      n_heads: 4
     ffn:
       d_ff: 2048
-  L: 8
+  L: 4
   pooler: one_token
   out_features: 3
 dataset:
@@ -52,15 +52,15 @@ dataset:
 train:
   kfold_steps: 1
   batch_size: 32
-  n_epochs: 10
+  n_epochs: 30
 optimizer:
   _target_: torch.optim.Adam
-  lr: 1e-2
-  weight_decay: 1e-4
+  lr: 3e-3
+  weight_decay: 1e-5
 scheduler:
   _target_: torch.optim.lr_scheduler.LinearLR
   start_factor: 1.0
-  end_factor: 0.01
+  end_factor: 0.1
 criterion:
   _target_: torch.nn.CrossEntropyLoss
 logger:

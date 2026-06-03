@@ -63,6 +63,7 @@ class PandasDataset(Dataset):
         # Полные массивы — BFS обращается к self.enemies[prev_idx] по индексу в df_full
         self.teams = df_full[team_col].values.copy()
         self.enemies = df_full[enemy_col].values.copy()
+        self.seasons = df_full[season_col].values.copy()
 
         self.cat_columns = list(args["data"].get("cat_columns") or [])
 
@@ -315,8 +316,19 @@ class PandasDataset(Dataset):
             out[node] = self._get_team_cat_codes(team, feat_idx)
         return torch.tensor(out, dtype=torch.long)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, ...]:
-        real_idx = self.split_indices[idx]
+    def find_match_index(self, team: str, enemy: str, season) -> int | None:
+        """Возвращает индекс в df_full матча `team` vs `enemy` в сезоне `season`
+        (с точки зрения `team`), либо None, если матч не найден."""
+        candidates = self.pair_to_indices.get((team, enemy), [])
+        season = str(season)
+        for idx in candidates:
+            if str(self.seasons[idx]) == season:
+                return idx
+        return None
+
+    def build_sample(self, real_idx: int) -> tuple[torch.Tensor, ...]:
+        """Строит тензоры одного матча по его индексу в df_full.
+        Используется и в __getitem__, и при инференсе одиночного матча."""
         t1 = self.teams[real_idx]
         t2 = self.enemies[real_idx]
         target = torch.tensor(self.df.iloc[real_idx][self.target_col], dtype=torch.long)
@@ -336,3 +348,7 @@ class PandasDataset(Dataset):
             full_history = full_history[:, :-1, :]
 
         return node_features, adj, hist, timestamps, full_history, x_cat, target
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, ...]:
+        real_idx = self.split_indices[idx]
+        return self.build_sample(real_idx)

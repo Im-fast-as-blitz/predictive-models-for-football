@@ -1,17 +1,17 @@
 model:
-  hidden_size: 512
+  hidden_size: 128
   dropout: 0.01
   embedder:
-    t: 100
+    t: 38
     mode: ts_full
     cat_emb_dim: 8
   layer:
     attention:
       depth: 4
-      n_heads: 8
+      n_heads: 4
     ffn:
-      d_ff: 2048
-  L: 8
+      d_ff: 512
+  L: 4
   pooler: one_token
   out_features: 3
 dataset:
@@ -41,21 +41,22 @@ dataset:
       - ht_l
 train:
   kfold_steps: 1
-  batch_size: 32
-  n_epochs: 10
+  batch_size: 256
+  n_epochs: 4
 optimizer:
-  _target_: torch.optim.Adam
-  lr: 1e-2
-  weight_decay: 1e-4
+  _target_: torch.optim.AdamW
+  lr: 3e-4
+  weight_decay: 1e-2
 scheduler:
   _target_: torch.optim.lr_scheduler.LinearLR
   start_factor: 1.0
-  end_factor: 0.01
+  end_factor: 0.0001
 criterion:
   _target_: torch.nn.CrossEntropyLoss
+  label_smoothing: 0.1
 logger:
   project_name: "socer_project"
   entity: null
-  run_name: "test_run"
+  run_name: "run_ts-full_lr3e-4_h128_l4_t38_nh4_d4_4ep_wd1e-2_d001_clip_ls"
   mode: "online"
   loss_names: ["loss"]
